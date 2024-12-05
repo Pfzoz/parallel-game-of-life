@@ -11,9 +11,10 @@
 #include <SDL2/SDL_video.h>
 #include <iostream>
 #include <vector>
+#include <omp.h>
 
 int SCREEN_WIDTH = 1000, SCREEN_HEIGHT = 1000;
-int GAME_WIDTH = 100, GAME_HEIGHT = 100;
+int GAME_WIDTH = 300, GAME_HEIGHT = 300;
 int CELL_WIDTH = SCREEN_WIDTH/GAME_WIDTH, CELL_HEIGHT = SCREEN_HEIGHT/GAME_HEIGHT;
 
 
@@ -74,6 +75,8 @@ int get_live_neighbors(std::vector<std::vector<bool>> &game_board, int line, int
 std::vector<std::vector<bool>> change_board(std::vector<std::vector<bool>> &game_board)
 {
     std::vector<std::vector<bool>> new_board(game_board);
+    Uint64 start = SDL_GetTicks64();
+    #pragma omp parallel for
     for (int i = 0; i < game_board.size(); i++) {
         for (int j = 0; j < game_board[0].size(); j++) {
             int live = get_live_neighbors(game_board, i, j);
@@ -84,6 +87,8 @@ std::vector<std::vector<bool>> change_board(std::vector<std::vector<bool>> &game
             }
         }
     }
+    Uint64 end = SDL_GetTicks64();
+    std::cout << "Took: " << end - start << "ms" << std::endl;
     return new_board;
 }
 
@@ -97,17 +102,13 @@ int main()
     SDL_Window *window = SDL_CreateWindow("Conway's Game of Life - PAUSADO (Use Espaço e Mouse)", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
     SDL_Surface *surface = SDL_GetWindowSurface(window);
 
-    SDL_Rect rect = {200, 200, 450, 300};
-
-    SDL_FillRect(surface, &rect, SDL_MapRGB(surface->format, 0xFF, 0xFF, 0xFF));
-
     std::vector<std::vector<bool>> game_board(GAME_HEIGHT, std::vector<bool>(GAME_WIDTH, false));
 
     SDL_Event event;
     bool quit = false;
 
     Uint32 last_update = SDL_GetTicks();
-    const Uint32 delay = 250;
+    Uint32 delay = 250;
     draw_board(surface, game_board);
     SDL_UpdateWindowSurface(window);
     bool running = false;
@@ -122,7 +123,7 @@ int main()
                     SDL_GetMouseState(&x, &y);
                     std::cout << "X: " << x / 10 << " Y: " << y / 10 << std::endl;
                     if (x > 0 && x < SCREEN_WIDTH && y > 0 && y < SCREEN_HEIGHT) {
-                        game_board[y / 10][x / 10] = !game_board[y / 10][x / 10];
+                        game_board[y / CELL_HEIGHT][x / CELL_WIDTH] = !game_board[y / CELL_HEIGHT][x / CELL_WIDTH];
                     }
                     break;
                 case SDL_KEYDOWN:
@@ -130,6 +131,17 @@ int main()
                         std::cout << "SPACE!" << std::endl;
                         running = !running;
                         SDL_SetWindowTitle(window, !running ? "Conway's Game of Life - PAUSADO (Use Espaço e Mouse)" : "Conway's Game of Life  (Use Espaço e Mouse)");
+                    }
+                    if (event.key.keysym.sym == SDLK_DOWN) {
+                        delay -= delay > 0 ? 10 : 0;
+                        std::cout << "Delay: " << delay << std::endl;
+                    }
+                    if (event.key.keysym.sym == SDLK_UP) {
+                        delay += delay < 250 ? 10 : 0;
+                        std::cout << "Delay: " << delay << std::endl;
+                    }
+                    if (event.key.keysym.sym == SDLK_r) {
+                        game_board = std::vector<std::vector<bool>>(GAME_HEIGHT, std::vector<bool>(GAME_WIDTH, false));
                     }
                     break;
             }
